@@ -175,23 +175,21 @@ class TokenManager {
 
     // Load identity
     this.holderDid = JSON.parse(fs.readFileSync(DID_FILE, 'utf8')).id;
-    // importPKCS8 requires a PKCS#8 formatted string (BEGIN PRIVATE KEY). 
-    // If the key is in PKCS#1 or generic EC format (BEGIN EC PRIVATE KEY), jose's importPKCS8 will fail.
-    // Instead we can use importPKCS8 for PKCS#8, or importSPKI for PKCS#1. 
-    // Since the key starts with "BEGIN EC PRIVATE KEY", it's a SEC1/PKCS#1 key, so we need to use a general import function or standard node API.
-    // We'll use the crypto module and jose's importJWK or standard import method to handle it automatically if possible,
-    // but the easiest is using crypto.createPrivateKey and jose's standard algorithms or converting it.
-    // Actually, jose provides `importPKCS8` which strictly requires PKCS#8.
-    // Since we know the key format, it's easier to convert it or use `importJWK`, `importSPKI`, etc.
-    // Given the error, let's use a try-catch and handle standard pem formats via jose's utility functions or fallback to crypto module.
-    // Actually Jose 5 allows importing from standard Node.js KeyObject. Let's use crypto.createPrivateKey.
-    const crypto = require('crypto');
+    
+    // Read the SEC1/PKCS#1 EC Private Key
     const privateKeyPem = fs.readFileSync(KEY_FILE, 'utf8');
+    const crypto = require('crypto');
+    const { importJWK } = require('jose');
+    
+    // 1. Parse with Node's crypto module (handles BEGIN EC PRIVATE KEY)
     const keyObject = crypto.createPrivateKey(privateKeyPem);
     
-    // Convert Node crypto KeyObject to JWK or import directly. 
-    // jose library can sign using a Node.js crypto.KeyObject directly!
-    this.privateKey = keyObject;
+    // 2. Export to JWK format
+    const jwk = keyObject.export({ format: 'jwk' });
+    
+    // 3. Import gracefully into `jose`
+    this.privateKey = await importJWK(jwk, 'ES256');
+    
     console.log(`[TOKEN] Holder: ${this.holderDid}`);
 
     await this.refresh();
