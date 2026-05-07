@@ -17,10 +17,9 @@ COPY wallet-identity ./wallet-identity
 # Expose the port
 EXPOSE 8090
 
-# Health check (optional but recommended)
-# We hit the root path directly to check if the proxy is responding
+# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-  CMD node -e "require('http').get('http://localhost:8090/', (r) => { if (r.statusCode !== 404 && r.statusCode !== 200 && r.statusCode !== 502) throw new Error(r.statusCode) })" || exit 1
+  CMD node -e "require('http').get('http://localhost:8090/__health', (r) => { if (r.statusCode !== 200) throw new Error(r.statusCode) })" || exit 1
 
 # Run the application
 CMD ["node", "proxy.js"]

@@ -259,6 +259,8 @@ const tokenManager = new TokenManager();
 // =============================================================
 // Proxy — forward everything with Bearer token
 // =============================================================
+app.get('/__health', (req, res) => res.status(200).send('OK'));
+
 app.use('/', createProxyMiddleware({
   target: APISIX_URL,
   changeOrigin: true,
