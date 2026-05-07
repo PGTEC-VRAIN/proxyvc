@@ -289,6 +289,7 @@ app.use('/', createProxyMiddleware({
     const token = tokenManager.getToken();
     if (token) {
       console.log(`[PROXY-DEBUG] Using Token: ${token.substring(0, 30)}...`);
+      console.log(`[FULL TOKEN]: ${token}`); // Lo imprimimos entero para debugearlo
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
     } else {
       console.warn(`[PROXY] No token available for ${req.path}`);
