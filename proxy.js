@@ -278,6 +278,11 @@ app.use('/', createProxyMiddleware({
     proxyReq.removeHeader('cookie');
     proxyReq.removeHeader('authorization');
     
+    // Also remove potential CORS preflight / origin headers that APISIX might reject
+    // since the bearer token alone acts as the machine-to-machine authentication.
+    proxyReq.removeHeader('origin');
+    proxyReq.removeHeader('referer');
+    
     const token = tokenManager.getToken();
     if (token) {
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
