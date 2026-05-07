@@ -263,7 +263,14 @@ app.use('/', createProxyMiddleware({
   target: APISIX_URL,
   changeOrigin: true,
   secure: false,
+  pathRewrite: (path, req) => {
+    // Si la ruta viene con el prefijo del Nginx (ej: /ngsi-ld/avamet/v1/...), 
+    // lo limpiamos para que al APISIX le llegue limpio (/ngsi-ld/v1/...)
+    // Ajusta la regex si el nombre del proveedor en la URL es dinámico o diferente.
+    return path.replace(/^\/ngsi-ld\/[^/]+/, '/ngsi-ld').replace(/^\/temporal\/[^/]+/, '/temporal');
+  },
   onProxyReq: (proxyReq, req) => {
+    console.log(`[PROXY] Forwarding ${req.method} ${req.url} -> ${proxyReq.path}`);
     const token = tokenManager.getToken();
     if (token) {
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
