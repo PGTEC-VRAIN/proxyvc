@@ -273,6 +273,11 @@ app.use('/', createProxyMiddleware({
   },
   onProxyReq: (proxyReq, req) => {
     console.log(`[PROXY] Forwarding ${req.method} ${req.url} -> ${proxyReq.path}`);
+    
+    // Remove conflicting headers from the incoming browser request
+    proxyReq.removeHeader('cookie');
+    proxyReq.removeHeader('authorization');
+    
     const token = tokenManager.getToken();
     if (token) {
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
