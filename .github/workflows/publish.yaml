@@ -6,7 +6,7 @@ on:
       - 'v*.*.*'   
 
 env:
-  IMAGE_NAME: ghcr.io/pgtec-vrain/proxyVC
+  IMAGE_NAME: ghcr.io/pgtec-vrain/proxyvc
 
 permissions:
   contents: read
