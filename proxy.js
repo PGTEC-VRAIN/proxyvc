@@ -274,20 +274,28 @@ app.use('/', createProxyMiddleware({
   onProxyReq: (proxyReq, req) => {
     console.log(`[PROXY] Forwarding ${req.method} ${req.url} -> ${proxyReq.path}`);
     
-    // Remove conflicting headers from the incoming browser request
-    proxyReq.removeHeader('cookie');
-    proxyReq.removeHeader('authorization');
-    
-    // Also remove potential CORS preflight / origin headers that APISIX might reject
-    // since the bearer token alone acts as the machine-to-machine authentication.
-    proxyReq.removeHeader('origin');
-    proxyReq.removeHeader('referer');
+    // Limpieza radical: borramos TODO lo que huela a navegador o frontend
+    const headersToRemove = [
+      'cookie', 'authorization', 'origin', 'referer', 
+      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 
+      'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
+      'accept-language', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto'
+    ];
+    headersToRemove.forEach(h => proxyReq.removeHeader(h));
     
     const token = tokenManager.getToken();
     if (token) {
+      // Imprimimos el token para probarlo a mano si falla
+      console.log(`[PROXY-DEBUG] Using Token: ${token.substring(0, 30)}... (run 'kubectl logs' to see full token if needed)`);
+      // console.log(`[FULL TOKEN]: ${token}`); // Descomentar en entorno local para copiar fácil
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
     } else {
       console.warn(`[PROXY] No token available for ${req.path}`);
+    }
+  },
+  onProxyRes: (proxyRes, req, res) => {
+    if (proxyRes.statusCode === 401) {
+      console.error(`[PROXY] ❌ APISIX rejected request with 401. APISIX Headers:`, proxyRes.headers);
     }
   },
   onError: (err, _req, res) => {
