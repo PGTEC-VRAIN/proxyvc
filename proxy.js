@@ -277,17 +277,18 @@ app.use('/', createProxyMiddleware({
     // Limpieza radical: borramos TODO lo que huela a navegador o frontend
     const headersToRemove = [
       'cookie', 'authorization', 'origin', 'referer', 
-      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 
-      'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform',
-      'accept-language', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto'
+      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-gpc', 'priority',
+      'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'user-agent',
+      'accept', 'accept-language', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto'
     ];
     headersToRemove.forEach(h => proxyReq.removeHeader(h));
     
+    // Forzamos un host limpio para APISIX (el Host de APISIX, no el del Dashboard)
+    proxyReq.setHeader('Host', new URL(APISIX_URL).host);
+
     const token = tokenManager.getToken();
     if (token) {
-      // Imprimimos el token para probarlo a mano si falla
-      console.log(`[PROXY-DEBUG] Using Token: ${token.substring(0, 30)}... (run 'kubectl logs' to see full token if needed)`);
-      // console.log(`[FULL TOKEN]: ${token}`); // Descomentar en entorno local para copiar fácil
+      console.log(`[PROXY-DEBUG] Using Token: ${token.substring(0, 30)}...`);
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
     } else {
       console.warn(`[PROXY] No token available for ${req.path}`);
