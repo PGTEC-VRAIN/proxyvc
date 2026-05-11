@@ -265,9 +265,7 @@ app.use('/', createProxyMiddleware({
   target: APISIX_URL,
   changeOrigin: true,
   secure: false,
-  headers: {
-    host: new URL(APISIX_URL).host,  // fuerza apisix-avamet-ds.pgtec-vrain-dataspace.eu
-  },
+
   onProxyReq: (proxyReq, req) => {
     console.log(`[PROXY] Forwarding ${req.method} ${req.url} -> ${proxyReq.path}`);
     
@@ -281,13 +279,14 @@ app.use('/', createProxyMiddleware({
     headersToRemove.forEach(h => proxyReq.removeHeader(h));
     
     // Forzamos un host limpio para APISIX (el Host de APISIX, no el del Dashboard)
-    proxyReq.setHeader('Host', new URL(APISIX_URL).host);
+    const targetHost = new URL(APISIX_URL).host;
+    proxyReq.setHeader('Host', targetHost);   // sobrescribe DESPUÉS de changeOrigin
+    proxyReq.setHeader('accept', 'application/ld+json');
 
     const token = tokenManager.getToken();
     if (token) {
-      console.log(`[PROXY-DEBUG] Using Token: ${token.substring(0, 30)}...`);
-      console.log(`[FULL TOKEN]: ${token}`); // Lo imprimimos entero para debugearlo
       proxyReq.setHeader('Authorization', `Bearer ${token}`);
+      console.log(`[PROXY] Token set, forwarding to ${targetHost}${proxyReq.path}`);
     } else {
       console.warn(`[PROXY] No token available for ${req.path}`);
     }
