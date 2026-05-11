@@ -32,7 +32,7 @@ const VP_REFRESH_INTERVAL = 10 * 60_000;       // 10 minutes
 // VP / Access Token config  (replicates get_access.sh)
 // =============================================================
 const VERIFIER_URL = process.env.VERIFIER_URL || "https://verifier-avamet-ds.pgtec-vrain-dataspace.eu/services/machine-id";
-const VP_CLIENT_ID = process.env.VP_CLIENT_ID || "account-console";
+const VP_CLIENT_ID = process.env.VP_CLIENT_ID || "machine-id";
 const VP_SCOPE = process.env.VP_SCOPE || "operator1";
 const DID_FILE = process.env.DID_FILE || "./wallet-identity/did.json";
 const KEY_FILE = process.env.KEY_FILE || "./wallet-identity/private-key.pem";
@@ -265,7 +265,9 @@ app.use('/', createProxyMiddleware({
   target: APISIX_URL,
   changeOrigin: true,
   secure: false,
-
+  headers: {
+    host: new URL(APISIX_URL).host,  // fuerza apisix-avamet-ds.pgtec-vrain-dataspace.eu
+  },
   onProxyReq: (proxyReq, req) => {
     console.log(`[PROXY] Forwarding ${req.method} ${req.url} -> ${proxyReq.path}`);
     
