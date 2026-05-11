@@ -261,46 +261,43 @@ const tokenManager = new TokenManager();
 // =============================================================
 app.get('/__health', (req, res) => res.status(200).send('OK'));
 
-app.use('/', createProxyMiddleware({
-  target: APISIX_URL,
-  changeOrigin: true,
-  secure: false,
+app.use('/', async (req, res) => {
+  const targetHost = new URL(APISIX_URL).host;
+  const targetUrl = `${APISIX_URL}${req.url}`;
+  
+  console.log(`[PROXY] Forwarding ${req.method} ${req.url} → ${targetUrl}`);
 
-  onProxyReq: (proxyReq, req) => {
-    console.log(`[PROXY] Forwarding ${req.method} ${req.url} -> ${proxyReq.path}`);
-    
-    // Limpieza radical: borramos TODO lo que huela a navegador o frontend
-    const headersToRemove = [
-      'cookie', 'authorization', 'origin', 'referer', 
-      'sec-fetch-dest', 'sec-fetch-mode', 'sec-fetch-site', 'sec-gpc', 'priority',
-      'sec-ch-ua', 'sec-ch-ua-mobile', 'sec-ch-ua-platform', 'user-agent',
-      'accept', 'accept-language', 'forwarded', 'x-forwarded-for', 'x-forwarded-host', 'x-forwarded-proto'
-    ];
-    headersToRemove.forEach(h => proxyReq.removeHeader(h));
-    
-    // Forzamos un host limpio para APISIX (el Host de APISIX, no el del Dashboard)
-    const targetHost = new URL(APISIX_URL).host;
-    proxyReq.setHeader('Host', targetHost);   // sobrescribe DESPUÉS de changeOrigin
-    proxyReq.setHeader('accept', 'application/ld+json');
+  const token = tokenManager.getToken();
+  if (!token) {
+    console.warn('[PROXY] No token available');
+    return res.status(503).send('No token');
+  }
 
-    const token = tokenManager.getToken();
-    if (token) {
-      proxyReq.setHeader('Authorization', `Bearer ${token}`);
-      console.log(`[PROXY] Token set, forwarding to ${targetHost}${proxyReq.path}`);
-    } else {
-      console.warn(`[PROXY] No token available for ${req.path}`);
-    }
-  },
-  onProxyRes: (proxyRes, req, res) => {
-    if (proxyRes.statusCode === 401) {
-      console.error(`[PROXY] ❌ APISIX rejected request with 401. APISIX Headers:`, proxyRes.headers);
-    }
-  },
-  onError: (err, _req, res) => {
-    console.error('[PROXY]', err.message);
+  const headers = {
+    'Host': targetHost,
+    'Authorization': `Bearer ${token}`,
+    'Accept': req.headers['accept'] || 'application/ld+json',
+    'Link': req.headers['link'] || '',
+  };
+
+  try {
+    const upstream = await fetch(targetUrl, {
+      method: req.method,
+      headers,
+    });
+
+    console.log(`[PROXY] Upstream responded ${upstream.status}`);
+    
+    res.status(upstream.status);
+    upstream.headers.forEach((v, k) => res.setHeader(k, v));
+    
+    const body = await upstream.text();
+    res.send(body);
+  } catch (err) {
+    console.error('[PROXY] fetch error:', err.message);
     res.status(502).send('Proxy error');
-  },
-}));
+  }
+});
 
 // =============================================================
 // Start — VC first, then token, then listen
