@@ -38,6 +38,29 @@ const DID_FILE = process.env.DID_FILE || "./wallet-identity/did.json";
 const KEY_FILE = process.env.KEY_FILE || "./wallet-identity/private-key.pem";
 
 // =============================================================
+// Wallet key material — shared by CredentialManager (proof-of-possession on
+// issuance) and TokenManager (VP signing on presentation). Loaded once and
+// cached, since CredentialManager.issue() now needs it before TokenManager
+// ever initializes.
+// =============================================================
+let _walletIdentity = null;
+async function getWalletIdentity() {
+  if (_walletIdentity) return _walletIdentity;
+  const crypto = require('crypto');
+  const { importJWK } = require('jose');
+
+  const holderDid = JSON.parse(fs.readFileSync(DID_FILE, 'utf8')).id;
+  const privateKeyPem = fs.readFileSync(KEY_FILE, 'utf8');
+  const keyObject = crypto.createPrivateKey(privateKeyPem);
+  const jwk = keyObject.export({ format: 'jwk' });
+  const { d, ...publicJwk } = jwk; // strip private material for use in proof headers
+  const privateKey = await importJWK(jwk, 'ES256');
+
+  _walletIdentity = { holderDid, privateKey, publicJwk };
+  return _walletIdentity;
+}
+
+// =============================================================
 // Credential Manager — issues a fresh VC from Keycloak
 // =============================================================
 class CredentialManager {
@@ -108,7 +131,37 @@ class CredentialManager {
     const credTokenData = await credTokenRes.json();
     if (!credTokenData.access_token) throw new Error(`Credential token exchange failed: ${JSON.stringify(credTokenData)}`);
 
-    // 5. Issue the Verifiable Credential
+    // The access token's authorization_details carries the *actual*
+    // per-issuance credential_identifier (e.g. "ServiceCredential_0000"),
+    // which differs from the credential_configuration_id used earlier —
+    // sending CRED_CONFIG_ID here gets rejected as unknown_credential_identifier.
+    const credIdentifier =
+      credTokenData.authorization_details?.[0]?.credential_identifiers?.[0] || CRED_CONFIG_ID;
+
+    // 5. Get a c_nonce and build a signed proof-of-possession JWT
+    // (required whenever the credential config has cryptographic_binding_methods_supported set)
+    console.log('[VC] Requesting c_nonce for proof of possession');
+    const nonceRes = await fetch(`${base}/realms/${KEYCLOAK_REALM}/protocol/oid4vc/nonce`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${credTokenData.access_token}` },
+    });
+    const nonceData = await nonceRes.json();
+    if (!nonceRes.ok || !nonceData.nonce) throw new Error(`Nonce request failed: ${JSON.stringify(nonceData)}`);
+
+    const identity = await getWalletIdentity();
+    // Must match Keycloak's own externally-reported issuer identity exactly
+    // (OID4VCIssuerWellKnownProvider.getIssuer), which can differ from `base`
+    // (KEYCLOAK_URL is the in-cluster URL used just to reach the server).
+    // offerData.issuer is "<credential_issuer>/protocol/oid4vc/credential-offer",
+    // so strip that known suffix to recover the canonical issuer URL.
+    const credentialIssuer = offerData.issuer.replace(/\/protocol\/oid4vc\/credential-offer$/, '');
+    const proofJwt = await new SignJWT({ nonce: nonceData.nonce })
+      .setProtectedHeader({ alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: identity.publicJwk })
+      .setAudience(credentialIssuer)
+      .setIssuedAt()
+      .sign(identity.privateKey);
+
+    // 6. Issue the Verifiable Credential
     console.log('[VC] Issuing credential');
     const credRes = await fetch(
       `${base}/realms/${KEYCLOAK_REALM}/protocol/oid4vc/credential`,
@@ -119,8 +172,9 @@ class CredentialManager {
           Authorization: `Bearer ${credTokenData.access_token}`,
         },
         body: JSON.stringify({
-          credential_identifier: CRED_CONFIG_ID,
+          credential_identifier: credIdentifier,
           format: CRED_FORMAT,
+          proofs: { jwt: [proofJwt] },
         }),
       }
     );
