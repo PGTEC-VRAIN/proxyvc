@@ -82,7 +82,9 @@ class CredentialManager {
     );
     const offerData = await offerRes.json();
     if (!offerRes.ok) throw new Error(`Credential offer creation failed: ${JSON.stringify(offerData)}`);
-    const offerUrl = `${offerData.issuer}${offerData.nonce}`;
+    // offerData.nonce has no leading slash — the real endpoint is
+    // {issuer}/{nonce}, and bare concatenation silently 404s.
+    const offerUrl = `${offerData.issuer}/${offerData.nonce}`;
 
     // 3. Get pre-authorized code
     console.log('[VC] Requesting pre-authorized code');
