@@ -71,12 +71,17 @@ class CredentialManager {
     const accessToken = loginData.access_token;
 
     // 2. Get credential offer URI
+    // Note: the real Keycloak REST resource is "create-credential-offer", not
+    // "credential-offer-uri" (that path 404s). pre_authorized=true is required
+    // so the offer carries a pre-authorized_code grant, matching step 3 below —
+    // without it the offer uses the interactive authorization_code grant instead.
     console.log('[VC] Fetching credential offer URI');
     const offerRes = await fetch(
-      `${base}/realms/${KEYCLOAK_REALM}/protocol/oid4vc/credential-offer-uri?credential_configuration_id=${CRED_CONFIG_ID}`,
+      `${base}/realms/${KEYCLOAK_REALM}/protocol/oid4vc/create-credential-offer?credential_configuration_id=${CRED_CONFIG_ID}&pre_authorized=true`,
       { headers: { Authorization: `Bearer ${accessToken}` } }
     );
     const offerData = await offerRes.json();
+    if (!offerRes.ok) throw new Error(`Credential offer creation failed: ${JSON.stringify(offerData)}`);
     const offerUrl = `${offerData.issuer}${offerData.nonce}`;
 
     // 3. Get pre-authorized code
