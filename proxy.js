@@ -179,9 +179,12 @@ class CredentialManager {
       }
     );
     const credData = await credRes.json();
-    if (!credData.credential) throw new Error(`Credential issuance failed: ${JSON.stringify(credData)}`);
+    // Response wraps the issued credential(s) in a "credentials" array
+    // (batch-style shape) rather than a bare top-level "credential" field.
+    const issuedCredential = credData.credentials?.[0]?.credential || credData.credential;
+    if (!issuedCredential) throw new Error(`Credential issuance failed: ${JSON.stringify(credData)}`);
 
-    this.vcJwt = credData.credential;
+    this.vcJwt = issuedCredential;
     console.log('[VC] Credential obtained successfully');
   }
 
