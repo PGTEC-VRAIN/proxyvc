@@ -146,7 +146,7 @@ class CredentialManager {
       headers: { Authorization: `Bearer ${credTokenData.access_token}` },
     });
     const nonceData = await nonceRes.json();
-    if (!nonceRes.ok || !nonceData.nonce) throw new Error(`Nonce request failed: ${JSON.stringify(nonceData)}`);
+    if (!nonceRes.ok || !nonceData.c_nonce) throw new Error(`Nonce request failed: ${JSON.stringify(nonceData)}`);
 
     const identity = await getWalletIdentity();
     // Must match Keycloak's own externally-reported issuer identity exactly
@@ -155,7 +155,7 @@ class CredentialManager {
     // offerData.issuer is "<credential_issuer>/protocol/oid4vc/credential-offer",
     // so strip that known suffix to recover the canonical issuer URL.
     const credentialIssuer = offerData.issuer.replace(/\/protocol\/oid4vc\/credential-offer$/, '');
-    const proofJwt = await new SignJWT({ nonce: nonceData.nonce })
+    const proofJwt = await new SignJWT({ nonce: nonceData.c_nonce })
       .setProtectedHeader({ alg: 'ES256', typ: 'openid4vci-proof+jwt', jwk: identity.publicJwk })
       .setAudience(credentialIssuer)
       .setIssuedAt()
